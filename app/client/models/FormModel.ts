@@ -50,7 +50,14 @@ export class FormModelImpl extends Disposable implements FormModel {
         this.submitted.set(false);
         this.error.set(null);
       });
-      this.form.set(await this._formAPI.getForm(this._getFetchFormParams()));
+
+      const prefilled: { [key: string]: string } = {};
+      const searchParams = new URLSearchParams(window.location.search);
+      for (const [key, value] of searchParams) {
+        prefilled[key] = value;
+      }
+
+      this.form.set(await this._formAPI.getForm(this._getFetchFormParams(), prefilled));
     } catch (e: unknown) {
       let error: string | undefined;
       if (e instanceof ApiError) {
@@ -78,6 +85,10 @@ export class FormModelImpl extends Disposable implements FormModel {
     const form = this.form.get();
     if (!form) { throw new Error('form is not defined'); }
 
+    for (const [key, value] of Object.entries(form.formPrefilled)) {
+      formData.setRaw(key, value);
+    }
+
     for (const key of formData.keys()) {
       const value = formData.getAll(key);
       if (value.length > 0 && value[0] instanceof File) {
@@ -88,7 +99,6 @@ export class FormModelImpl extends Disposable implements FormModel {
         formData.set(key, uploadResult);
       }
     }
-
     const colValues = typedFormDataToJson(formData);
     try {
       this.submitting.set(true);

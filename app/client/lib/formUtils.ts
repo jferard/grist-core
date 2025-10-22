@@ -133,6 +133,10 @@ export class TypedFormData {
     this._formData.set(key, JSON.stringify(value));
   }
 
+  public setRaw(key: string, value: any) {
+    this._formData.set(key, value);
+  }
+
   public getAll(key: string) {
     const values = Array.from(this._formData.getAll(key));
     if (['Ref', 'RefList'].includes(String(this.type(key)))) {

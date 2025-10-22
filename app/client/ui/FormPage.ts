@@ -54,6 +54,7 @@ export class FormPage extends Disposable {
 
       const formRenderer = FormRenderer.new(rootLayoutNode, {
         fields: form.formFieldsById,
+        prefilled: form.formPrefilled,
         rootLayoutNode,
         disabled: this._model.submitting,
         error: this._error,

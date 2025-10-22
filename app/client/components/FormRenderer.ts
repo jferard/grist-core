@@ -55,6 +55,8 @@ export type FormLayoutNodeType =
 export interface FormRendererContext {
   /** Field metadata, keyed by field id. */
   fields: Record<number, FormField>;
+  /** Prefilled values, as a dict key/value */
+  prefilled: { [key: string]: string };
   /** The root of the FormLayoutNode tree. */
   rootLayoutNode: FormLayoutNode;
   /** Disables the Submit node if true. */
@@ -232,7 +234,9 @@ class FieldRenderer extends FormRenderer {
     if (!field) { throw new Error(); }
 
     const Renderer = FieldRenderers[field.type as keyof typeof FieldRenderers] ?? TextRenderer;
-    this.renderer = this.autoDispose(new Renderer(field, context));
+    const prefilledValue = this.context.prefilled[field.colId];
+    delete this.context.prefilled[field.colId];
+    this.renderer = this.autoDispose(new Renderer(field, context, prefilledValue));
   }
 
   public render() {
@@ -245,7 +249,7 @@ class FieldRenderer extends FormRenderer {
 }
 
 abstract class BaseFieldRenderer extends Disposable {
-  public constructor(protected field: FormField, protected context: FormRendererContext) {
+  public constructor(protected field: FormField, protected context: FormRendererContext, protected prefilledValue: string) {
     super();
   }
 
@@ -291,7 +295,7 @@ class TextRenderer extends BaseFieldRenderer {
 
   private _format = this.field.options.formTextFormat ?? 'singleline';
   private _lineCount = String(this.field.options.formTextLineCount || 3);
-  private _value = Observable.create<string>(this, '');
+  private _value = Observable.create<string>(this, this.prefilledValue == undefined ? '' : this.prefilledValue);
 
   public input() {
     if (this._format === 'singleline') {
@@ -337,7 +341,7 @@ class NumericRenderer extends BaseFieldRenderer {
 
   private _format = this.field.options.formNumberFormat ?? 'text';
   private _value = Observable.create<string>(this, '');
-  private _spinnerValue = Observable.create<number|''>(this, '');
+  private _spinnerValue = Observable.create<number|''>(this, this.prefilledValue == undefined ? '' : Number(this.prefilledValue));
 
   public input() {
     if (this._format === 'text') {
@@ -406,8 +410,8 @@ class ChoiceRenderer extends BaseFieldRenderer  {
     checked: Observable<string|null>
   }> = this.autoDispose(obsArray());
 
-  public constructor(field: FormField, context: FormRendererContext) {
-    super(field, context);
+  public constructor(field: FormField, context: FormRendererContext, prefilledValue: string) {
+    super(field, context, prefilledValue);
 
     const choices = this.field.options.choices;
     if (!Array.isArray(choices) || choices.some((choice) => typeof choice !== 'string')) {
@@ -423,7 +427,7 @@ class ChoiceRenderer extends BaseFieldRenderer  {
       this._choices = choices;
     }
 
-    this.value = Observable.create<string>(this, '');
+    this.value = Observable.create<string>(this, this.prefilledValue == 'undefined' ? '' : this.prefilledValue);
 
     this._radioButtons.set(this._choices.map(choice => ({
       label: String(choice),
@@ -553,7 +557,7 @@ class ChoiceRenderer extends BaseFieldRenderer  {
 
 class BoolRenderer extends BaseFieldRenderer {
   protected inputType = 'checkbox';
-  protected checked = Observable.create<boolean>(this, false);
+  protected checked = Observable.create<boolean>(this, this.prefilledValue == "true" ? true : false);
 
   private _format = this.field.options.formToggleFormat ?? 'switch';
 
@@ -617,8 +621,8 @@ class ChoiceListRenderer extends BaseFieldRenderer  {
 
   private _alignment = this.field.options.formOptionsAlignment ?? 'vertical';
 
-  public constructor(field: FormField, context: FormRendererContext) {
-    super(field, context);
+  public constructor(field: FormField, context: FormRendererContext, prefilledValue: string) {
+    super(field, context, prefilledValue);
 
     let choices = this.field.options.choices;
     if (!Array.isArray(choices) || choices.some((choice) => typeof choice !== 'string')) {
@@ -635,9 +639,16 @@ class ChoiceListRenderer extends BaseFieldRenderer  {
       choices = choices.slice(0, 30);
     }
 
+    let checkedChoices: Set<string>;
+    if (prefilledValue == undefined) {
+      checkedChoices = new Set();
+    } else {
+      checkedChoices = new Set(prefilledValue.split("|"));
+    }
+
     this.checkboxes.set(choices.map(choice => ({
       label: choice,
-      checked: Observable.create(this, null),
+      checked: Observable.create(this, checkedChoices.has(choice) ? "checked" : null),
     })));
   }
 
@@ -689,8 +700,8 @@ class RefListRenderer extends BaseFieldRenderer {
 
   private _alignment = this.field.options.formOptionsAlignment ?? 'vertical';
 
-  public constructor(field: FormField, context: FormRendererContext) {
-    super(field, context);
+  public constructor(field: FormField, context: FormRendererContext, prefilledValue: string) {
+    super(field, context, prefilledValue);
 
     const references = this.field.refValues ?? [];
     const sortOrder = this.field.options.formOptionsSortOrder;
@@ -764,8 +775,8 @@ class RefRenderer extends BaseFieldRenderer {
     checked: Observable<string|null>
   }> = this.autoDispose(obsArray());
 
-  public constructor(field: FormField, context: FormRendererContext) {
-    super(field, context);
+  public constructor(field: FormField, context: FormRendererContext, prefilledValue: string) {
+    super(field, context, prefilledValue);
 
     const choices: [number|string, CellValue][] = this.field.refValues ?? [];
     const sortOrder = this.field.options.formOptionsSortOrder ?? 'default';

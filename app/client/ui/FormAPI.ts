@@ -16,6 +16,7 @@ export interface Form {
   formLayoutSpec: string;
   formTitle: string;
   formTableId: string;
+  formPrefilled: { [key: string]: string };
 }
 
 /**
@@ -89,7 +90,7 @@ export type FormOptionsAlignment = 'vertical' | 'horizontal';
 export type FormOptionsSortOrder = 'default' | 'ascending' | 'descending';
 
 export interface FormAPI {
-  getForm(options: GetFormOptions): Promise<Form>;
+  getForm(options: GetFormOptions, prefilled?: { [key: string]: string }): Promise<Form>;
   createRecord(options: CreateRecordOptions): Promise<void>;
   createAttachments(options: CreateAttachmentOptions): Promise<number[]>;
 }
@@ -128,11 +129,19 @@ export class FormAPIImpl extends BaseAPI implements FormAPI {
     super(options);
   }
 
-  public async getForm(options: GetFormOptions): Promise<Form> {
+  public async getForm(options: GetFormOptions, prefilled?: { [key: string]: string }): Promise<Form> {
     const {vsId} = options;
-    return this.requestJson(this._docOrShareUrl(`/forms/${vsId}`, options), {
+    const ret = this.requestJson(this._docOrShareUrl(`/forms/${vsId}`, options), {
       method: "GET",
     });
+    if (prefilled == null) {
+      return ret;
+    } else {
+      return ret.then((form: Form) => {
+        form.formPrefilled = prefilled;
+        return form;
+      });
+    }
   }
 
   public async createRecord(options: CreateRecordOptions): Promise<void> {
